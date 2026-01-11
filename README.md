@@ -1,55 +1,63 @@
 # Stock-SMA-Analysis-Dashboard
-A multi-timeframe stock analysis dashboard that uses 20-period (SMA-20) and 50-period (SMA-50) Simple Moving Averages to identify and visualize market trends on hourly and daily charts.
-The dashboard automatically evaluates the relative position of both moving averages to determine trend direction, helping traders and analysts quickly assess market conditions across timeframes.
+📈 Stock Trend Analysis Dashboard (Python)
+A Python-based, multi-timeframe stock analysis dashboard that uses 20-period (SMA-20) and 50-period (SMA-50) Simple Moving Averages to identify and visualize market trends on hourly and daily charts.
+The dashboard evaluates the relative position of both moving averages to automatically determine trend direction for each timeframe.
+
 🚀 Features
-Multi-timeframe analysis
-  Hourly trend detection
-  Daily trend detection
-Moving average strategy
-  SMA-20 (short-term trend)
-  SMA-50 (medium-term trend)
-Automatic trend detection
-  Identifies Bullish, Bearish, or Neutral trends based on SMA positioning
-Visual dashboard
-  Clean, professional chart layout
-  Trend labels for each timeframe
+Hourly & Daily Trend Detection
+- SMA-20 & SMA-50 indicators
+- Automatic Bullish / Bearish / Neutral signals
+- Interactive or static chart visualization
+- Clean, professional dashboard layout
 
-🧠 How It Works
-The system calculates two moving averages for each timeframe:
-  SMA-20 → short-term momentum
-  SMA-50 → medium-term trend
+🧠 Strategy Logic
 
-| Condition       | Trend       |
-| --------------- | ----------  |
-| SMA-20 > SMA-50 | Bullish 📈  |
-| SMA-20 < SMA-50 | Bearish 📉  |
-| SMA-20 ≈ SMA-50 | Neutral ➖  |
+Two moving averages are calculated for each timeframe:
 
-This logic is applied separately to hourly and daily price data, allowing you to see alignment or divergence between short- and long-term trends.
+SMA-20 → short-term momentum
 
-🖥️ Dashboard Output
-The dashboard displays:
-  Hourly chart with SMA-20 and SMA-50
-  Daily chart with SMA-20 and SMA-50
-  Trend label for each timeframe
-This makes it easy to spot:
-  Trend confirmations
-  Trend reversals
-  Timeframe conflicts (e.g., bullish daily, bearish hourly)
+SMA-50 → medium-term trend
 
-📊 Use Cases
-Swing trading
-Trend following strategies
-Market condition monitoring
-Multi-timeframe technical analysis
+Trend is determined as:
 
-⚙️ Tech Stack
+Condition	Trend
+SMA-20 > SMA-50	Bullish 📈
+SMA-20 < SMA-50	Bearish 📉
+SMA-20 ≈ SMA-50	Neutral ➖
+
+This logic is applied separately to hourly and daily data, allowing multi-timeframe confirmation of trends.
+
+📊 Dashboard Output
+
+The dashboard shows:
+
+Hourly candlestick or line chart
+
+Daily candlestick or line chart
+
+SMA-20 & SMA-50 overlays
+
+Trend label for each timeframe
+
+This allows you to quickly identify:
+
+Trend alignment
+
+Trend reversals
+
+Conflicting timeframe signals
+
+🧰 Tech Stack
+
 Python
-Pandas
-NumPy
-Plotly / Matplotlib / TradingView (or your charting library)
-API or CSV price data
 
+Pandas
+
+NumPy
+
+Matplotlib / Plotly
+
+yFinance / CSV / API data source
 
 
 
