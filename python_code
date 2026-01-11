@@ -1,0 +1,422 @@
+import yfinance as yf
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from datetime import datetime, timedelta
+import tkinter as tk
+from tkinter import ttk, messagebox
+import numpy as np
+
+class StockAnalyzer:
+    def __init__(self, ticker):
+        self.ticker = ticker
+        self.daily_data = None
+        self.hourly_data = None
+        
+    def fetch_data(self):
+        """Fetch 6 months of daily and hourly stock data"""
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=180)
+        
+        # Fetch daily data
+        daily_raw = yf.download(
+            self.ticker, 
+            start=start_date, 
+            end=end_date, 
+            interval='1d',
+            progress=False
+        )
+        
+        # Handle multi-index columns from yfinance
+        if isinstance(daily_raw.columns, pd.MultiIndex):
+            daily_raw.columns = daily_raw.columns.get_level_values(0)
+        
+        self.daily_data = daily_raw.copy()
+        
+        # Fetch hourly data (last 60 days)
+        hourly_start = end_date - timedelta(days=60)
+        hourly_raw = yf.download(
+            self.ticker,
+            start=hourly_start,
+            end=end_date,
+            interval='1h',
+            progress=False
+        )
+        
+        # Handle multi-index columns from yfinance
+        if isinstance(hourly_raw.columns, pd.MultiIndex):
+            hourly_raw.columns = hourly_raw.columns.get_level_values(0)
+        
+        self.hourly_data = hourly_raw.copy()
+        
+    def calculate_sma(self, data, period):
+        """Calculate Simple Moving Average"""
+        return data['Close'].rolling(window=period).mean()
+    
+    def add_sma_indicators(self):
+        """Add SMA20 and SMA50 to both datasets"""
+        self.daily_data['SMA20'] = self.calculate_sma(self.daily_data, 20)
+        self.daily_data['SMA50'] = self.calculate_sma(self.daily_data, 50)
+        self.hourly_data['SMA20'] = self.calculate_sma(self.hourly_data, 20)
+        self.hourly_data['SMA50'] = self.calculate_sma(self.hourly_data, 50)
+        
+    def identify_trend(self, data):
+        """Identify trend direction"""
+        if len(data) < 50:
+            return 'Insufficient Data'
+        
+        # Get the last row as a Series
+        latest = data.iloc[-1].copy()
+        
+        # Extract scalar values using .item() or direct indexing
+        try:
+            sma20_val = latest['SMA20']
+            sma50_val = latest['SMA50']
+            close_val = latest['Close']
+            
+            # Convert to Python native float
+            if isinstance(sma20_val, (pd.Series, np.ndarray)):
+                sma20_val = sma20_val.item() if hasattr(sma20_val, 'item') else float(sma20_val.iloc[0])
+            if isinstance(sma50_val, (pd.Series, np.ndarray)):
+                sma50_val = sma50_val.item() if hasattr(sma50_val, 'item') else float(sma50_val.iloc[0])
+            if isinstance(close_val, (pd.Series, np.ndarray)):
+                close_val = close_val.item() if hasattr(close_val, 'item') else float(close_val.iloc[0])
+            
+            sma20 = float(sma20_val)
+            sma50 = float(sma50_val)
+            close = float(close_val)
+            
+        except (KeyError, ValueError, TypeError, AttributeError):
+            return 'Insufficient Data'
+        
+        if pd.isna(sma20) or pd.isna(sma50) or pd.isna(close):
+            return 'Insufficient Data'
+        
+        if sma20 > sma50:
+            if close > sma20:
+                return 'Strong Bullish'
+            return 'Bullish'
+        elif sma20 < sma50:
+            if close < sma20:
+                return 'Strong Bearish'
+            return 'Bearish'
+        else:
+            return 'Neutral'
+    
+    def generate_signal(self):
+        """Generate buy/sell signals"""
+        daily_trend = self.identify_trend(self.daily_data)
+        hourly_trend = self.identify_trend(self.hourly_data)
+        
+        daily_latest = self.daily_data.iloc[-1].copy()
+        hourly_latest = self.hourly_data.iloc[-1].copy()
+        
+        # Helper function to safely extract scalar values
+        def get_scalar(value):
+            if isinstance(value, (pd.Series, np.ndarray)):
+                return float(value.item() if hasattr(value, 'item') else value.iloc[0])
+            return float(value)
+        
+        # Convert to float values to avoid Series comparison issues
+        try:
+            current_price = get_scalar(daily_latest['Close'])
+            daily_sma20 = get_scalar(daily_latest['SMA20'])
+            daily_sma50 = get_scalar(daily_latest['SMA50'])
+            hourly_sma20 = get_scalar(hourly_latest['SMA20'])
+            hourly_sma50 = get_scalar(hourly_latest['SMA50'])
+        except (KeyError, ValueError, TypeError, AttributeError) as e:
+            raise Exception(f"Error extracting values: {str(e)}")
+        
+        signal = {
+            'ticker': self.ticker,
+            'current_price': current_price,
+            'daily_trend': daily_trend,
+            'hourly_trend': hourly_trend,
+            'daily_sma20': daily_sma20,
+            'daily_sma50': daily_sma50,
+            'hourly_sma20': hourly_sma20,
+            'hourly_sma50': hourly_sma50,
+            'signal': 'HOLD'
+        }
+        
+        # Strong Buy: Both daily and hourly show bullish trend
+        if 'Bullish' in daily_trend and 'Bullish' in hourly_trend:
+            if daily_sma20 > daily_sma50 and hourly_sma20 > hourly_sma50:
+                signal['signal'] = 'STRONG BUY'
+                signal['reason'] = 'SMA20 > SMA50 on both daily and hourly charts with bullish trends'
+        
+        # Strong Sell: Both daily and hourly show bearish trend
+        elif 'Bearish' in daily_trend and 'Bearish' in hourly_trend:
+            if daily_sma20 < daily_sma50 and hourly_sma20 < hourly_sma50:
+                signal['signal'] = 'STRONG SELL'
+                signal['reason'] = 'SMA20 < SMA50 on both daily and hourly charts with bearish trends'
+        
+        # Buy: Daily bullish
+        elif 'Bullish' in daily_trend:
+            signal['signal'] = 'BUY'
+            signal['reason'] = 'Daily trend is bullish (SMA20 > SMA50)'
+        
+        # Sell: Daily bearish
+        elif 'Bearish' in daily_trend:
+            signal['signal'] = 'SELL'
+            signal['reason'] = 'Daily trend is bearish (SMA20 < SMA50)'
+        
+        else:
+            signal['reason'] = 'Mixed or neutral signals - waiting for clearer trend'
+        
+        return signal
+
+
+class StockAnalyzerGUI:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Stock SMA Analysis Dashboard")
+        self.root.geometry("1400x900")
+        
+        # Store analyzed data
+        self.analyzed_stocks = {}
+        
+        # Create main frame
+        self.setup_ui()
+        
+    def setup_ui(self):
+        """Setup the user interface"""
+        # Top frame for input
+        input_frame = ttk.Frame(self.root, padding="10")
+        input_frame.pack(fill=tk.X)
+        
+        # Title
+        title_label = ttk.Label(
+            input_frame, 
+            text="Stock SMA Analysis Dashboard", 
+            font=("Arial", 16, "bold")
+        )
+        title_label.pack(pady=5)
+        
+        # Input section
+        input_section = ttk.Frame(input_frame)
+        input_section.pack(pady=10)
+        
+        ttk.Label(
+            input_section, 
+            text="Enter Tickers (comma-separated):", 
+            font=("Arial", 11)
+        ).pack(side=tk.LEFT, padx=5)
+        
+        self.ticker_entry = ttk.Entry(input_section, width=40, font=("Arial", 11))
+        self.ticker_entry.pack(side=tk.LEFT, padx=5)
+        self.ticker_entry.insert(0, "AAPL, MSFT, GOOGL")
+        
+        self.analyze_btn = ttk.Button(
+            input_section, 
+            text="Analyze", 
+            command=self.analyze_stocks
+        )
+        self.analyze_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Progress label
+        self.progress_label = ttk.Label(input_frame, text="", font=("Arial", 10))
+        self.progress_label.pack(pady=5)
+        
+        # Notebook for tabs
+        self.notebook = ttk.Notebook(self.root)
+        self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+    def analyze_stocks(self):
+        """Analyze stocks when button is clicked"""
+        tickers_text = self.ticker_entry.get().strip()
+        
+        if not tickers_text:
+            messagebox.showwarning("Input Error", "Please enter at least one ticker symbol")
+            return
+        
+        # Parse tickers
+        tickers = [t.strip().upper() for t in tickers_text.split(',') if t.strip()]
+        
+        if not tickers:
+            messagebox.showwarning("Input Error", "Please enter valid ticker symbols")
+            return
+        
+        # Clear previous tabs
+        for tab in self.notebook.tabs():
+            self.notebook.forget(tab)
+        
+        self.analyzed_stocks = {}
+        self.analyze_btn.config(state=tk.DISABLED)
+        
+        # Analyze each ticker
+        for i, ticker in enumerate(tickers):
+            self.progress_label.config(
+                text=f"Analyzing {ticker} ({i+1}/{len(tickers)})..."
+            )
+            self.root.update()
+            
+            try:
+                analyzer = StockAnalyzer(ticker)
+                analyzer.fetch_data()
+                
+                if len(analyzer.daily_data) < 50:
+                    messagebox.showwarning(
+                        "Data Error", 
+                        f"Insufficient data for {ticker}. Skipping..."
+                    )
+                    continue
+                
+                analyzer.add_sma_indicators()
+                signal = analyzer.generate_signal()
+                
+                self.analyzed_stocks[ticker] = {
+                    'analyzer': analyzer,
+                    'signal': signal
+                }
+                
+                # Create tab for this stock
+                self.create_stock_tab(ticker, analyzer, signal)
+                
+            except Exception as e:
+                messagebox.showerror(
+                    "Error", 
+                    f"Error analyzing {ticker}: {str(e)}"
+                )
+                continue
+        
+        self.progress_label.config(text="Analysis complete!")
+        self.analyze_btn.config(state=tk.NORMAL)
+        
+    def create_stock_tab(self, ticker, analyzer, signal):
+        """Create a tab for a specific stock"""
+        # Create tab frame
+        tab_frame = ttk.Frame(self.notebook)
+        self.notebook.add(tab_frame, text=ticker)
+        
+        # Signal info frame at top
+        info_frame = ttk.Frame(tab_frame, relief=tk.RAISED, borderwidth=2)
+        info_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        # Determine signal color
+        signal_colors = {
+            'STRONG BUY': '#00AA00',
+            'BUY': '#66BB66',
+            'HOLD': '#FFA500',
+            'SELL': '#FF6666',
+            'STRONG SELL': '#CC0000'
+        }
+        signal_color = signal_colors.get(signal['signal'], '#808080')
+        
+        # Signal display
+        signal_label = tk.Label(
+            info_frame,
+            text=f"SIGNAL: {signal['signal']}",
+            font=("Arial", 14, "bold"),
+            fg=signal_color,
+            bg='white'
+        )
+        signal_label.pack(pady=5)
+        
+        # Create info grid
+        info_grid = ttk.Frame(info_frame)
+        info_grid.pack(pady=5)
+        
+        info_text = f"""
+        Current Price: ${signal['current_price']:.2f}
+        
+        Daily Trend: {signal['daily_trend']}
+        Daily SMA20: ${signal['daily_sma20']:.2f} | Daily SMA50: ${signal['daily_sma50']:.2f}
+        
+        Hourly Trend: {signal['hourly_trend']}
+        Hourly SMA20: ${signal['hourly_sma20']:.2f} | Hourly SMA50: ${signal['hourly_sma50']:.2f}
+        
+        Reason: {signal['reason']}
+        """
+        
+        info_label = ttk.Label(
+            info_grid,
+            text=info_text,
+            font=("Arial", 10),
+            justify=tk.LEFT
+        )
+        info_label.pack()
+        
+        # Charts frame
+        charts_frame = ttk.Frame(tab_frame)
+        charts_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        
+        # Create matplotlib figure with 2 subplots
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8))
+        
+        # Daily chart
+        ax1.plot(
+            analyzer.daily_data.index, 
+            analyzer.daily_data['Close'], 
+            label='Close Price', 
+            linewidth=2, 
+            color='black'
+        )
+        ax1.plot(
+            analyzer.daily_data.index, 
+            analyzer.daily_data['SMA20'], 
+            label='SMA 20', 
+            linewidth=1.5, 
+            color='blue', 
+            linestyle='--'
+        )
+        ax1.plot(
+            analyzer.daily_data.index, 
+            analyzer.daily_data['SMA50'], 
+            label='SMA 50', 
+            linewidth=1.5, 
+            color='red', 
+            linestyle='--'
+        )
+        ax1.set_title(f'{ticker} - Daily Chart with SMAs', fontsize=12, fontweight='bold')
+        ax1.set_xlabel('Date')
+        ax1.set_ylabel('Price ($)')
+        ax1.legend(loc='best')
+        ax1.grid(True, alpha=0.3)
+        
+        # Hourly chart
+        ax2.plot(
+            analyzer.hourly_data.index, 
+            analyzer.hourly_data['Close'], 
+            label='Close Price', 
+            linewidth=1.5, 
+            color='black'
+        )
+        ax2.plot(
+            analyzer.hourly_data.index, 
+            analyzer.hourly_data['SMA20'], 
+            label='SMA 20', 
+            linewidth=1.5, 
+            color='blue', 
+            linestyle='--'
+        )
+        ax2.plot(
+            analyzer.hourly_data.index, 
+            analyzer.hourly_data['SMA50'], 
+            label='SMA 50', 
+            linewidth=1.5, 
+            color='red', 
+            linestyle='--'
+        )
+        ax2.set_title(f'{ticker} - Hourly Chart with SMAs', fontsize=12, fontweight='bold')
+        ax2.set_xlabel('Date/Time')
+        ax2.set_ylabel('Price ($)')
+        ax2.legend(loc='best')
+        ax2.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        
+        # Embed matplotlib figure in tkinter
+        canvas = FigureCanvasTkAgg(fig, master=charts_frame)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+
+def main():
+    root = tk.Tk()
+    app = StockAnalyzerGUI(root)
+    root.mainloop()
+
+
+if __name__ == "__main__":
+    main()
