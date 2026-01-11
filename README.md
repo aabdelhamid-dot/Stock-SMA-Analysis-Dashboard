@@ -11,55 +11,44 @@ Hourly & Daily Trend Detection
 - Clean, professional dashboard layout
 
 🧠 Strategy Logic
-
 Two moving averages are calculated for each timeframe:
-
-SMA-20 → short-term momentum
-
-SMA-50 → medium-term trend
-
-Trend is determined as:
+- SMA-20 → short-term momentum
+- SMA-50 → medium-term trend
+- Trend is determined as:
 
 Condition	Trend
-SMA-20 > SMA-50	Bullish 📈
-SMA-20 < SMA-50	Bearish 📉
-SMA-20 ≈ SMA-50	Neutral ➖
+- SMA-20 > SMA-50	Bullish 📈
+- SMA-20 < SMA-50	Bearish 📉
+- SMA-20 ≈ SMA-50	Neutral ➖
 
 This logic is applied separately to hourly and daily data, allowing multi-timeframe confirmation of trends.
 
 📊 Dashboard Output
-
 The dashboard shows:
-
-Hourly candlestick or line chart
-
-Daily candlestick or line chart
-
-SMA-20 & SMA-50 overlays
-
-Trend label for each timeframe
-
+- Hourly candlestick or line chart
+- Daily candlestick or line chart
+- SMA-20 & SMA-50 overlays
+- Trend label for each timeframe
 This allows you to quickly identify:
-
-Trend alignment
-
-Trend reversals
-
-Conflicting timeframe signals
+- Trend alignment
+- Trend reversals
+-Conflicting timeframe signals
 
 🧰 Tech Stack
+- Python
+- Pandas
+- NumPy
+- Matplotlib / Plotly
+-yFinance / CSV / API data source
 
-Python
+The script will:
+- Load price data
+- Calculate SMA-20 and SMA-50
+- Detect trend direction
+- Render the charts and dashboard
 
-Pandas
-
-NumPy
-
-Matplotlib / Plotly
-
-yFinance / CSV / API data source
-
-
+📄 License
+MIT License – free to use, modify, and distribute.
 
 
 
